@@ -1,0 +1,500 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: API specification
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: runs
+    description: Arena run records and leaderboard
+  - name: multiplayer
+    description: Two-player room and matchmaking operations
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+  /runs:
+    get:
+      operationId: listRuns
+      tags: [runs]
+      summary: Leaderboard
+      description: Top arena runs ordered by score, highest first.
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of runs to return (default 20).
+          schema:
+            type: number
+            minimum: 1
+            maximum: 100
+      responses:
+        "200":
+          description: Leaderboard entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Run"
+    post:
+      operationId: createRun
+      tags: [runs]
+      summary: Submit a finished run
+      description: Records the result of a completed arena run and returns the stored entry with its leaderboard rank.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RunInput"
+      responses:
+        "201":
+          description: Run recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Run"
+        "400":
+          description: Invalid run payload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /runs/recent:
+    get:
+      operationId: listRecentRuns
+      tags: [runs]
+      summary: Recent activity
+      description: Most recently recorded runs, newest first.
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of runs to return (default 8).
+          schema:
+            type: number
+            minimum: 1
+            maximum: 50
+      responses:
+        "200":
+          description: Recent runs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Run"
+  /runs/stats:
+    get:
+      operationId: getRunStats
+      tags: [runs]
+      summary: Arena statistics
+      description: Aggregate statistics across every recorded run.
+      responses:
+        "200":
+          description: Aggregate stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RunStats"
+  /multiplayer/private:
+    post:
+      operationId: createPrivateRoom
+      tags: [multiplayer]
+      summary: Create a private two-player room
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MatchInput"
+      responses:
+        "201":
+          description: Private room created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MatchSession"
+  /multiplayer/private/{code}/join:
+    post:
+      operationId: joinPrivateRoom
+      tags: [multiplayer]
+      summary: Join a private room by code
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+            minLength: 6
+            maxLength: 6
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MatchInput"
+      responses:
+        "200":
+          description: Joined private room
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MatchSession"
+        "404":
+          description: Room not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Room is full
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /multiplayer/quick:
+    post:
+      operationId: joinQuickPlay
+      tags: [multiplayer]
+      summary: Join or create the random matchmaking queue
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MatchInput"
+      responses:
+        "200":
+          description: Quick-play matchmaking session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MatchSession"
+  /multiplayer/rooms/{code}/poll:
+    post:
+      operationId: pollMultiplayerRoom
+      tags: [multiplayer]
+      summary: Poll room membership and player state
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RoomHeartbeat"
+      responses:
+        "200":
+          description: Current room
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MatchSession"
+        "404":
+          description: Room or player not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /multiplayer/rooms/{code}/state:
+    post:
+      operationId: updateMultiplayerState
+      tags: [multiplayer]
+      summary: Publish local player movement and receive current room state
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlayerStateUpdate"
+      responses:
+        "200":
+          description: State accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MatchSession"
+        "404":
+          description: Room or player not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /multiplayer/rooms/{code}/leave:
+    post:
+      operationId: leaveMultiplayerRoom
+      tags: [multiplayer]
+      summary: Leave a multiplayer room
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LeaveRoomInput"
+      responses:
+        "204":
+          description: Player removed
+components:
+  schemas:
+    MatchInput:
+      type: object
+      required: [callsign, arenaId]
+      properties:
+        callsign:
+          type: string
+          minLength: 1
+          maxLength: 16
+        arenaId:
+          type: string
+          minLength: 1
+          maxLength: 32
+        gameMode:
+          type: string
+          enum: [horde, royale, duel, hunt]
+    PlayerNetworkState:
+      type: object
+      required: [x, y, z, yaw, health, maxHealth, dead, kills, wave, updatedAt]
+      properties:
+        x: { type: number }
+        y: { type: number }
+        z: { type: number }
+        yaw: { type: number }
+        health: { type: number, minimum: 0 }
+        maxHealth: { type: number, minimum: 1 }
+        dead: { type: boolean }
+        kills: { type: number, minimum: 0 }
+        wave: { type: number, minimum: 0 }
+        updatedAt: { type: number }
+    MultiplayerPlayer:
+      type: object
+      required: [id, callsign, state]
+      properties:
+        id: { type: string }
+        callsign: { type: string }
+        state:
+          oneOf:
+            - $ref: "#/components/schemas/PlayerNetworkState"
+            - type: "null"
+    DamageEvent:
+      description: A hit the reporting client resolved against another operator.
+      type: object
+      required: [targetId, damage]
+      properties:
+        targetId: { type: string }
+        damage: { type: number, minimum: 0 }
+        headshot: { type: boolean }
+    IncomingHit:
+      description: Damage another operator reported against the reader.
+      type: object
+      required: [fromId, fromCallsign, damage, headshot]
+      properties:
+        fromId: { type: string }
+        fromCallsign: { type: string }
+        damage: { type: number, minimum: 0 }
+        headshot: { type: boolean }
+    MatchSession:
+      type: object
+      required: [roomCode, playerId, sessionToken, mode, status, hostId, arenaId, gameMode, players, incoming]
+      properties:
+        roomCode: { type: string }
+        playerId: { type: string }
+        sessionToken: { type: string }
+        mode:
+          type: string
+          enum: [private, quick]
+        status:
+          type: string
+          enum: [waiting, matched]
+        hostId: { type: string }
+        arenaId: { type: string }
+        gameMode:
+          description: The room's game mode. Only the host may change it.
+          type: string
+          enum: [horde, royale, duel, hunt]
+        players:
+          type: array
+          items:
+            $ref: "#/components/schemas/MultiplayerPlayer"
+        incoming:
+          description: >-
+            Damage reported against the reading player since their last
+            request. Draining is per reader, so each hit is delivered once.
+          type: array
+          items:
+            $ref: "#/components/schemas/IncomingHit"
+    PlayerStateUpdate:
+      type: object
+      required: [playerId, sessionToken, state]
+      properties:
+        playerId: { type: string }
+        sessionToken: { type: string }
+        state:
+          $ref: "#/components/schemas/PlayerNetworkState"
+        hits:
+          type: array
+          maxItems: 32
+          items:
+            $ref: "#/components/schemas/DamageEvent"
+        gameMode:
+          description: Host only. Ignored from a non-host player.
+          type: string
+          enum: [horde, royale, duel, hunt]
+    RoomHeartbeat:
+      type: object
+      required: [playerId, sessionToken]
+      properties:
+        playerId: { type: string }
+        sessionToken: { type: string }
+        gameMode:
+          description: Host only. Ignored from a non-host player.
+          type: string
+          enum: [horde, royale, duel, hunt]
+    LeaveRoomInput:
+      type: object
+      required: [playerId, sessionToken]
+      properties:
+        playerId: { type: string }
+        sessionToken: { type: string }
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+    Run:
+      type: object
+      required:
+        - id
+        - callsign
+        - score
+        - wave
+        - kills
+        - accuracy
+        - bestCombo
+        - durationSeconds
+        - createdAt
+      properties:
+        id:
+          type: number
+        callsign:
+          type: string
+        score:
+          type: number
+        wave:
+          type: number
+        kills:
+          type: number
+        accuracy:
+          type: number
+          description: Shot accuracy percentage from 0 to 100.
+        bestCombo:
+          type: number
+        durationSeconds:
+          type: number
+        createdAt:
+          type: string
+          format: date-time
+        rank:
+          type: ["number", "null"]
+          description: Leaderboard position, present on freshly submitted runs.
+    RunInput:
+      type: object
+      required:
+        - callsign
+        - score
+        - wave
+        - kills
+        - accuracy
+        - bestCombo
+        - durationSeconds
+      properties:
+        callsign:
+          type: string
+          minLength: 1
+          maxLength: 16
+        score:
+          type: number
+          minimum: 0
+          maximum: 10000000
+        wave:
+          type: number
+          minimum: 1
+          maximum: 500
+        kills:
+          type: number
+          minimum: 0
+          maximum: 200000
+        accuracy:
+          type: number
+          minimum: 0
+          maximum: 100
+        bestCombo:
+          type: number
+          minimum: 0
+          maximum: 5000
+        durationSeconds:
+          type: number
+          minimum: 0
+          maximum: 86400
+    RunStats:
+      type: object
+      required:
+        - totalRuns
+        - bestScore
+        - bestWave
+        - totalKills
+        - averageWave
+      properties:
+        totalRuns:
+          type: number
+        bestScore:
+          type: number
+        bestWave:
+          type: number
+        totalKills:
+          type: number
+        averageWave:
+          type: number
+        topCallsign:
+          type: ["string", "null"]
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
